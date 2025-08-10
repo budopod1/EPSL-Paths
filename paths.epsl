@@ -1,0 +1,318 @@
+#import osinterface;
+
+Path {
+    Str:drive,
+    Str:root,
+    [Str]:parts
+}
+
+Str#path separator str {
+    return path_sep_str;
+}
+
+Byte#path separator chr {
+    return path_sep_chr;
+}
+
+Str#[Path:path].stringify {
+    Str:result = Str [];
+    [result].extend[path.drive];
+    [result].extend[path.root];
+    [result].extend[[path.parts].join[path_sep_str]];
+    return result;
+}
+
+Path#Path_from [Str:str] {
+    Path:result = Path ["", "", [Str] []];
+    L:i = 0;
+    if (paths_have_drive && [str].len >= i + 2 && str[i+1] == ':') {
+        result.drive = [str].slice[i][i+2];
+        i += 2;
+    };
+    W:slash_count = 0;
+    while ([str].len > i && str[i] == path_sep_chr) {
+        slash_count++;
+        i++;
+    };
+    // this behavior mirrors that found here:
+    // https://docs.python.org/3.13/library/pathlib.html#pathlib.PurePath.root
+    if (slash_count > 2) {
+        slash_count = 1;
+    };
+    result.root = [path_sep_str].repeat[slash_count];
+    Str:part = Str [];
+    while ([str].len > i) {
+        Byte:byte = str[i];
+        if (byte == path_sep_chr) {
+            [result.parts].append[part];
+            part = Str [];
+        } else {
+            [part].append[byte];
+        };
+        i++;
+    };
+    if (part) {
+        [result.parts].append[part];
+    };
+    return result;
+}
+
+Path#[Path:path].clone {
+    return Path [path.drive, path.root, [path.parts].clone];
+}
+
+Str#[Path:path].name {
+    return [path.parts].at[-1];
+}
+
+Str#[Path:path].extension {
+    Str:name = [path].name;
+    given ([name].last_index_of['.'] as L:dot_index) {
+        return [name].slice_from[dot_index];
+    } else {
+        return "";
+    };
+}
+
+Str#[Path:path].stem {
+    Str:name = [path].name;
+    given ([name].last_index_of['.'] as L:dot_index) {
+        if (dot_index > 0) {
+            return [name].slice[0][dot_index];
+        };
+    };
+    return name;
+}
+
+Path#[Path:path].with_name[Str:name] {
+    [Str]:parts = [path.parts].clone;
+    if (!parts) {
+        abort "Cannot set a name on a path without a name";
+    };
+    parts[[parts].len-1] = name;
+    return Path [path.drive, path.root, parts];
+}
+
+Bool#[Path:path].is_absolute {
+    return path.root && (path.drive || !paths_have_drive);
+}
+
+Bool#[Path:path].is_relative_to[Path:other] {
+    return ([path.parts].starts_with[other.parts])
+        && ([path.drive] equals [other.drive])
+        && ([path.root] equals [other.root]);
+}
+
+Path#[Path:a] / [Path:b] {
+    Str:drive = a.drive;
+    Str:root = a.root;
+    [Str]:parts = [a.parts].clone;
+    if (b.drive) {
+        drive = b.drive;
+    };
+    if (b.root) {
+        root = b.root;
+        parts = [Str] [];
+    };
+    [parts].extend[b.parts];
+    return Path [drive, root, parts];
+}
+
+Path#[Path:a] / [Str:b] {
+    return [a] / [Path_from [b]];
+}
+
+Path#[Path:path].parent {
+    [Str]:parts = [path.parts].clone;
+    if (!parts) {
+        abort "Path has no parent";
+    };
+    [parts].pop_end;
+    return Path [path.drive, path.root, parts];
+}
+
+Str#get_home_path_str {
+    return get_home_path;
+}
+
+Path#home_Path {
+    return Path_from [get_home_path_str];    
+}
+
+Str#get_cwd_path_str {
+    Str?:maybe_cwd = get_cwd;
+    given (maybe_cwd as Str:cwd) {
+        return cwd;
+    } else {
+        abort "Cannot determine the current working directory";
+    };
+}
+
+Path#cwd_Path {
+    return Path_from [get_cwd_path_str];
+}
+
+Str?#realpath [Str:path] {
+    return resolve_real_path [path];
+}
+
+Path?#[Path:path].realpath {
+    Str?:maybe_resolved = realpath [[path].stringify];
+    given (maybe_resolved as Str:resolved) {
+        return Path_from [resolved];
+    } else {
+        return null;
+    };
+}
+
+Path#[Path:path].resolve {
+    Path:copy = [path].clone;
+    [Str]:popped_parts = [Str] [];
+    Path?:base = null;
+    while (true) {
+        base = [copy].realpath;
+        if (base) {
+            break;
+        };
+        [popped_parts].append[[copy.parts].pop_end];
+        if (!copy.parts) {
+            if ([copy].is_absolute) {
+                base = copy;
+            } else {
+                base = cwd_Path;
+            };
+            break;
+        };
+    };
+    Path:result = [base].unwrap;
+    for (Str:part in popped_parts step -1) {
+        [result.parts].append[part];
+    };
+    return result;
+}
+
+Str?#readlink [Str:path] {
+    return read_symlink [path];
+}
+
+Path?#[Path:path].readlink {
+    Str?:maybe_result = readlink [[path].stringify];
+    given (maybe_result as Str:result) {
+        return Path_from [result];
+    } else {
+        return null;
+    };
+}
+
+Bool#path_exists [Str:path] {
+    return check_path_exists [path];
+}
+
+Bool#[Path:path].exists {
+    return path_exists [[path].stringify];
+}
+
+Bool#path_is_file [Str:path] {
+    return check_path_is_file [path];
+}
+
+Bool#[Path:path].is_file {
+    return path_is_file [[path].stringify];
+}
+
+Bool#path_is_dir [Str:path] {
+    return check_path_is_dir [path];
+}
+
+Bool#[Path:path].is_dir {
+    return path_is_dir [[path].stringify];
+}
+
+Bool#path_is_symlink [Str:path] {
+    return check_path_is_symlink [path];
+}
+
+Bool#[Path:path].is_symlink {
+    return path_is_symlink [[path].stringify];
+}
+
+[Str]?#list_dir_contents [Str:dir] {
+    return read_directory_contents [dir];
+}
+
+[Path]?#[Path:path].dir_contents {
+    [Str]?:maybe_contents = list_dir_contents [[path].stringify];
+    given (maybe_contents as [Str]:str_contents) {
+        [Path]:contents = [Path] [];
+        for (Str:str_item in str_contents) {
+            [contents].append[Path_from [str_item]];
+        };
+        return contents;
+    } else {
+        return null;
+    };
+}
+
+Bool#create_file_at [Str:path] {
+    return make_file [path];
+}
+
+Bool#[Path:path].touch {
+    return create_file_at [[path].stringify];
+}
+
+Bool#create_dir_at [Str:path] {
+    return make_directory [path];
+}
+
+Bool#[Path:path].mkdir {
+    return create_dir_at [[path].stringify];
+}
+
+Bool#create_symlink from: [Str:from] to: [Str:to] {
+    return make_symlink [from] [to];
+}
+
+Bool#[Path:path].symlink_to[Path:target] {
+    return create_symlink from: [[path].stringify] to: [[target].stringify];
+}
+
+Bool#create_hardlink from: [Str:from] to: [Str:to] {
+    return make_hardlink [from] [to];
+}
+
+Bool#[Path:path].hardlink_to[Path:target] {
+    return create_hardlink from: [[path].stringify] to: [[target].stringify];
+}
+
+Bool#rename_path from: [Str:from] to: [Str:to] {
+    return rename_file [from] [to];
+}
+
+Bool#[Path:path].rename_to[Path:target] {
+    return rename_path from: [[path].stringify] to: [[target].stringify];
+}
+
+Bool#delete_file [Str:path] {
+    return unlink_file [path];
+}
+
+Bool#[Path:path].delete_file {
+    return delete_file [[path].stringify];
+}
+
+Bool#delete_dir [Str:path] {
+    return rmdir [path];
+}
+
+Bool#[Path:path].delete_dir {
+    return delete_dir [[path].stringify];
+}
+
+Bool#cd_to [Str:path] {
+    return chdir [path];
+}
+
+Bool#[Path:path].cd_to {
+    return cd_to [[path].stringify];
+}
