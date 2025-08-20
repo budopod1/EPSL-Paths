@@ -58,7 +58,7 @@ ARRAY_Byte path_separator_str = {1, 0, 1, path_separator_content};
 #ifdef _WIN32
 #warning "EPSL-Paths does not yet fully support windows"
 
-static void windows_abort() {
+static void windows_abort(void) {
     epsl_panicf("EPSL-Paths does not yet support this operation on windows");
 }
 #endif
@@ -89,15 +89,15 @@ static ARRAY_Byte *C_str_to_epsl_str(uint64_t ref_counter, char *src) {
     return result;
 }
 
-ARRAY_Byte *epsl_paths_path_sep_str() {
+ARRAY_Byte *epsl_paths_path_sep_str(void) {
     return &path_separator_str;
 }
 
-unsigned char epsl_paths_path_sep_chr() {
+unsigned char epsl_paths_path_sep_chr(void) {
     return *path_separator_content;
 }
 
-bool epsl_paths_paths_have_drive() {
+bool epsl_paths_paths_have_drive(void) {
 #ifdef _WIN32
     return true;
 #else
@@ -105,7 +105,7 @@ bool epsl_paths_paths_have_drive() {
 #endif
 }
 
-ARRAY_Byte *epsl_paths_get_home_path() {
+ARRAY_Byte *epsl_paths_get_home_path(void) {
 #ifdef _WIN32
     windows_abort();
 #else
@@ -117,7 +117,7 @@ ARRAY_Byte *epsl_paths_get_home_path() {
 #endif
 }
 
-NULLABLE_ARRAY_Byte *epsl_paths_get_cwd() {
+NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
 #ifdef _WIN32
     windows_abort();
 #else
