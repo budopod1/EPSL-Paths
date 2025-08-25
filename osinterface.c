@@ -47,7 +47,7 @@ ARRAY_Byte path_separator_str = {1, 0, 1, path_separator_content};
     if (new_name##_is_new_str) {\
         new_name = (char*)epsl_str->content;\
     } else {\
-        new_name = malloc(epsl_str->length+1);\
+        new_name = epsl_malloc(epsl_str->length+1);\
         memcpy(new_name, epsl_str->content, epsl_str->length);\
     }\
     new_name[epsl_str->length] = '\0';
@@ -65,13 +65,13 @@ static void windows_abort(void) {
 
 char *_strdup(const char *src) {
     size_t len = strlen(src);
-    char *copy = malloc(len+1);
+    char *copy = epsl_malloc(len+1);
     memcpy(copy, src, len+1);
     return copy;
 }
 
 static ARRAY_Byte *C_str_with_cap_to_epsl_str(uint64_t ref_counter, char *src, uint64_t cap) {
-    ARRAY_Byte *result = malloc(sizeof(*result));
+    ARRAY_Byte *result = epsl_malloc(sizeof(*result));
     result->ref_counter = ref_counter;
     result->capacity = cap;
     result->length = strlen(src);
@@ -80,7 +80,7 @@ static ARRAY_Byte *C_str_with_cap_to_epsl_str(uint64_t ref_counter, char *src, u
 }
 
 static ARRAY_Byte *C_str_to_epsl_str(uint64_t ref_counter, char *src) {
-    ARRAY_Byte *result = malloc(sizeof(*result));
+    ARRAY_Byte *result = epsl_malloc(sizeof(*result));
     result->ref_counter = ref_counter;
     uint64_t length = strlen(src);
     result->capacity = length + 1;
@@ -128,11 +128,11 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
     
 #endif
     size_t path_cap = 256;
-    char *path = malloc(path_cap);
+    char *path = epsl_malloc(path_cap);
     while (getcwd(path, path_cap) == NULL) {
         if (errno != ERANGE) return NULL;
         path_cap *= 2;
-        path = realloc(path, path_cap);
+        path = epsl_realloc(path, path_cap);
     }
     return C_str_with_cap_to_epsl_str(0, path, (uint64_t)path_cap);
 #endif
@@ -160,7 +160,7 @@ NULLABLE_ARRAY_Byte *epsl_paths_read_symlink(ARRAY_Byte *path) {
     if (lstat(c_path, &sb) == -1) goto cleanup;
     size_t max_link_len = sb.st_size + 1;
     
-    char *link_content = malloc(max_link_len);
+    char *link_content = epsl_malloc(max_link_len);
     if (readlink(c_path, link_content, max_link_len) == -1) goto cleanup;
 
     result = C_str_to_epsl_str(0, link_content);
