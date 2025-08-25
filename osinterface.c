@@ -16,7 +16,7 @@
 #include <pwd.h>
 #endif
 
-#include "builtins.h"
+#include "epsilon.h"
 
 #define EPSL_COMMON_PREFIX "epsl_paths_"
 
