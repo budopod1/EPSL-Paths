@@ -139,6 +139,9 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
 }
 
 NULLABLE_ARRAY_Byte *epsl_paths_resolve_real_path(ARRAY_Byte *path) {
+    if (path->length == 0) {
+        return epsl_paths_get_cwd();
+    }
 #ifdef _WIN32
     windows_abort();
 #else
