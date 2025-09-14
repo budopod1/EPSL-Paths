@@ -1,4 +1,4 @@
-$import osinterface;
+%import osinterface;
 
 Path {
     Str:drive,
