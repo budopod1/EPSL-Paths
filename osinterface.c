@@ -45,10 +45,10 @@ ARRAY_Byte path_separator_str = {1, 0, 1, path_separator_content};
     char *new_name;\
     bool new_name##_is_new_str = epsl_str->capacity <= epsl_str->length;\
     if (new_name##_is_new_str) {\
-        new_name = (char*)epsl_str->content;\
-    } else {\
         new_name = epsl_malloc(epsl_str->length+1);\
         memcpy(new_name, epsl_str->content, epsl_str->length);\
+    } else {\
+        new_name = (char*)epsl_str->content;\
     }\
     new_name[epsl_str->length] = '\0';
 
@@ -161,12 +161,27 @@ NULLABLE_ARRAY_Byte *epsl_paths_read_symlink(ARRAY_Byte *path) {
     
     struct stat sb;
     if (lstat(c_path, &sb) == -1) goto cleanup;
-    size_t max_link_len = sb.st_size + 1;
+    size_t link_cap = sb.st_size + 1;
+    if (link_cap <= 2) link_cap = 256;
     
-    char *link_content = epsl_malloc(max_link_len);
-    if (readlink(c_path, link_content, max_link_len) == -1) goto cleanup;
-
-    result = C_str_to_epsl_str(0, link_content);
+    char *link_content = NULL;
+    while (1) {
+        link_content = epsl_realloc(link_content, link_cap);
+        ssize_t status = readlink(c_path, link_content, link_cap);
+        if (status == -1) {
+            free(link_content);
+            goto cleanup;
+        } else if (status == link_cap) {
+            link_cap *= 2;
+        } else {
+            result = epsl_malloc(sizeof(*result));
+            result->ref_counter = 0;
+            result->capacity = (uint64_t)link_cap;
+            result->length = (uint64_t)status;
+            result->content = (unsigned char*)link_content;
+            break;
+        }
+    }
     
 cleanup:
     CLEANUP_C_STR(c_path);
