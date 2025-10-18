@@ -87,7 +87,7 @@ Str#[Path:path].stem {
 Path#[Path:path].with_name[Str:name] {
     [Str]:parts = [path.parts].clone;
     if (!parts) {
-        abort "Cannot set a name on a path without a name";
+        abort ["Cannot set a name on a path without a name"];
     };
     parts[[parts].len-1] = name;
     return Path [path.drive, path.root, parts];
@@ -125,7 +125,7 @@ Path#[Path:a] / [Str:b] {
 Path#[Path:path].parent {
     [Str]:parts = [path.parts].clone;
     if (!parts) {
-        abort "Path has no parent";
+        abort ["Path has no parent"];
     };
     [parts].pop_end;
     return Path [path.drive, path.root, parts];
@@ -144,7 +144,7 @@ Str#get_cwd_path_str {
     given (maybe_cwd as Str:cwd) {
         return cwd;
     } else {
-        abort "Cannot determine the current working directory";
+        abort ["Cannot determine the current working directory"];
     };
 }
 
