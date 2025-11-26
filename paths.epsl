@@ -31,8 +31,8 @@ Path#Path_from [Str:str] {
     };
     W:slash_count = 0;
     while ([str].len > i && str[i] == path_sep_chr) {
-        slash_count++;
-        i++;
+        slash_count += 1;
+        i += 1;
     };
     // this behavior mirrors that found here:
     // https://docs.python.org/3.13/library/pathlib.html#pathlib.PurePath.root
@@ -49,7 +49,7 @@ Path#Path_from [Str:str] {
         } else {
             [part].append[byte];
         };
-        i++;
+        i += 1;
     };
     if (part) {
         [result.parts].append[part];
