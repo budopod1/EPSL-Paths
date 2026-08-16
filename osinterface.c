@@ -11,6 +11,7 @@
 #define UNICODE
 #include <limits.h>
 #include <windows.h>
+#include <Lmcons.h>
 #include <wchar.h>
 #else
 #include <sys/types.h>
@@ -61,10 +62,6 @@ ARRAY_Byte path_separator_str = {1, 0, 1, path_separator_content};
 
 #ifdef _WIN32
 #warning "EPSL-Paths does not yet fully support windows"
-
-static void windows_abort(void) {
-    epsl_panicf("EPSL-Paths does not yet support this operation on windows");
-}
 #endif
 
 char *_strdup(const char *src) {
@@ -109,11 +106,11 @@ bool epsl_paths_paths_have_drive(void) {
 #endif
 }
 
-ARRAY_Byte *epsl_paths_get_home_path(void) {
+NULLABLE_ARRAY_Byte *epsl_paths_get_home_path(void) {
 #ifdef _WIN32
     char *user_profile = getenv("USERPROFILE");
     if (user_profile != NULL) {
-        return C_str_to_epsl_str(1, _strdup(user_profile));
+        return C_str_to_epsl_str(0, _strdup(user_profile));
     }
 
     char *home_drive = getenv("HOMEDRIVE");
@@ -128,9 +125,7 @@ ARRAY_Byte *epsl_paths_get_home_path(void) {
     uint64_t home_drive_len = strlen(home_drive);
 
     char *home_path = getenv("HOMEPATH");
-    if (home_path == NULL) {
-        epsl_panicf("Cannot determine home path");
-    }
+    if (home_path == NULL) return NULL;
     uint64_t home_path_len = strlen(home_path);
 
     uint64_t path_sep_len = strlen(strlen(path_separator_content));
@@ -151,7 +146,9 @@ ARRAY_Byte *epsl_paths_get_home_path(void) {
 #else
     char *home_dir = getenv("HOME");
     if (home_dir == NULL) {
-        home_dir = getpwuid(getuid())->pw_dir;
+        struct passwd *pwd = getpwuid(getuid());
+        if (pwd == NULL) return NULL;
+        home_dir = pwd->pw_dir;
     }
     return C_str_to_epsl_str(0, _strdup(home_dir));
 #endif
@@ -162,7 +159,7 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
     // UNICODE was #defined, so TCHARs are wchar_ts
     DWORD wchar_cap = GetCurrentDirectory(0, NULL);
     if (wchar_cap == 0) return NULL;
-    wchar_t *wchar_buf = malloc(wchar_cap);
+    wchar_t *wchar_buf = epsl_malloc(wchar_cap);
     DWORD status = GetCurrentDirectory(wchar_cap, wchar_buf);
     if (status == 0) {
         free(wchar_buf);
@@ -206,6 +203,20 @@ NULLABLE_ARRAY_Byte *epsl_paths_resolve_real_path(ARRAY_Byte *path) {
     char *resolved = realpath(c_path, NULL);
     CLEANUP_C_STR(c_path);
     return resolved ? C_str_to_epsl_str(0, resolved) : NULL;
+#endif
+}
+
+NULLABLE_ARRAY_Byte *epsl_paths_os_user_name(void) {
+#ifdef _WIN32
+    wchar_t wstr_name[UNLEN + 1];
+    if (!GetUserNameW(wstr_name, UNLEN + 1)) {
+        return NULL;
+    }
+    return epsl_epsl_str_from_wchar_str(0, wstr_name);
+#else
+    struct passwd *pwd = getpwuid(geteuid());
+    if (pwd == NULL) return NULL;
+    return C_str_to_epsl_str(0, _strdup(pwd->pw_name));
 #endif
 }
 

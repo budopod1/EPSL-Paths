@@ -131,25 +131,28 @@ Path#[Path:path].parent {
     return Path [path.drive, path.root, parts];
 }
 
-Str#get_home_path_str {
+Str?#get_home_path_str {
     return get_home_path;
 }
 
-Path#home_Path {
-    return Path_from [get_home_path_str];    
-}
-
-Str#get_cwd_path_str {
-    Str?:maybe_cwd = get_cwd;
-    given (maybe_cwd as Str:cwd) {
-        return cwd;
+Path?#home_Path {
+    given get_home_path_str as Str:home_path_str {
+        return Path_from [home_path_str];
     } else {
-        abort ["Cannot determine the current working directory"];
-    };
+        return null;
+    };    
 }
 
-Path#cwd_Path {
-    return Path_from [get_cwd_path_str];
+Str?#get_cwd_path_str {
+    return get_cwd;
+}
+
+Path?#cwd_Path {
+    given get_cwd_path_str as Str:cwd_path_str {
+        return Path_from [cwd_path_str];
+    } else {
+        return null;
+    };
 }
 
 Str?#realpath [Str:path] {
@@ -189,6 +192,32 @@ Path#[Path:path].resolve {
         [result.parts].append[part];
     };
     return result;
+}
+
+Str?#get_os_user_name {
+    return os_user_name;
+}
+
+Path#[Path:path].expand_user {
+    if !path.parts || ![path.parts[0]].starts_with["~"] {
+        return path;  
+    };
+    Str:part0 = path.parts[0];
+    if ![part0] equals ["~"] {
+        given get_os_user_name as Str:username {
+            if ![username] equals [[part0].slice_from[1]] {
+                return path;
+            };
+        } else {
+            return path;
+        };
+    };
+    given home_Path as Path:home {
+        [path.parts].pop[0];
+        return [home] / [path];
+    } else {
+        return path;
+    };
 }
 
 Str?#readlink [Str:path] {
