@@ -176,7 +176,10 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
     size_t path_cap = 256;
     char *path = epsl_malloc(path_cap);
     while (getcwd(path, path_cap) == NULL) {
-        if (errno != ERANGE) return NULL;
+        if (errno != ERANGE) {
+            free(path);
+            return NULL;
+        }
         path_cap *= 2;
         path = epsl_realloc(path, path_cap);
     }
