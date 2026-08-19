@@ -46,49 +46,12 @@ static unsigned char path_separator_content[] = "/";
 #define PATH_SEP_CHAR (*path_separator_content)
 ARRAY_Byte path_separator_str = {1, 0, 1, path_separator_content};
 
-#define EPSL_STR_TO_C_STR(epsl_str, new_name)\
-    char *new_name;\
-    bool new_name##_is_new_str = epsl_str->capacity <= epsl_str->length;\
-    if (new_name##_is_new_str) {\
-        new_name = epsl_malloc(epsl_str->length+1);\
-        memcpy(new_name, epsl_str->content, epsl_str->length);\
-    } else {\
-        new_name = (char*)epsl_str->content;\
-    }\
-    new_name[epsl_str->length] = '\0';
-
-#define CLEANUP_C_STR(str_name)\
-    if (str_name##_is_new_str) free(str_name);
-
 #ifdef _WIN32
 #warning "EPSL-Paths does not yet fully support windows"
 #endif
 
-char *_strdup(const char *src) {
-    size_t len = strlen(src);
-    char *copy = epsl_malloc(len+1);
-    memcpy(copy, src, len+1);
-    return copy;
-}
-
-static ARRAY_Byte *C_str_with_cap_to_epsl_str(uint64_t ref_counter, char *src, uint64_t cap) {
-    ARRAY_Byte *result = epsl_malloc(sizeof(*result));
-    result->ref_counter = ref_counter;
-    result->capacity = cap;
-    result->length = strlen(src);
-    result->content = (unsigned char*)src;
-    return result;
-}
-
-static ARRAY_Byte *C_str_to_epsl_str(uint64_t ref_counter, char *src) {
-    ARRAY_Byte *result = epsl_malloc(sizeof(*result));
-    result->ref_counter = ref_counter;
-    uint64_t length = strlen(src);
-    result->capacity = length + 1;
-    result->length = length;
-    result->content = (unsigned char*)src;
-    return result;
-}
+#define Cstr_to_Estr(a, b) ((ARRAY_Byte*)epsl_Cstr_to_Estr(a, b))
+#define dup_Cstr_to_Estr(a, b) ((ARRAY_Byte*)epsl_dup_Cstr_to_Estr(a, b))
 
 ARRAY_Byte *epsl_paths_path_sep_str(void) {
     return &path_separator_str;
@@ -110,7 +73,7 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_home_path(void) {
 #ifdef _WIN32
     char *user_profile = getenv("USERPROFILE");
     if (user_profile != NULL) {
-        return C_str_to_epsl_str(0, _strdup(user_profile));
+        return dup_Cstr_to_Estr(0, user_profile);
     }
 
     char *home_drive = getenv("HOMEDRIVE");
@@ -150,7 +113,7 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_home_path(void) {
         if (pwd == NULL) return NULL;
         home_dir = pwd->pw_dir;
     }
-    return C_str_to_epsl_str(0, _strdup(home_dir));
+    return dup_Cstr_to_Estr(0, home_dir);
 #endif
 }
 
@@ -165,13 +128,13 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
         free(wchar_buf);
         return NULL;
     }
-    struct Array *result = epsl_epsl_str_from_wchar_str(0, wchar_buf);
+    struct Array *result = epsl_Wstr_to_Estr(0, wchar_buf);
     free(wchar_buf);
     return result;
 #else
 #ifdef _GNU_SOURCE
     char *cwd = getcwd(NULL, 0);
-    return cwd ? C_str_to_epsl_str(0, cwd) : NULL;
+    return cwd ? Cstr_to_Estr(0, cwd) : NULL;
 #else
     size_t path_cap = 256;
     char *path = epsl_malloc(path_cap);
@@ -183,7 +146,9 @@ NULLABLE_ARRAY_Byte *epsl_paths_get_cwd(void) {
         path_cap *= 2;
         path = epsl_realloc(path, path_cap);
     }
-    return C_str_with_cap_to_epsl_str(0, path, (uint64_t)path_cap);
+    ARRAY_Byte *result = Cstr_to_Estr(0, path);
+    result->capacity = (uint64_t)path_cap;
+    return result;
 #endif
 #endif
 }
@@ -193,19 +158,19 @@ NULLABLE_ARRAY_Byte *epsl_paths_resolve_real_path(ARRAY_Byte *path) {
         return epsl_paths_get_cwd();
     }
 #ifdef _WIN32
-    wchar_t *rel_wchar_str = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *rel_wchar_str = epsl_Estr_to_Wstr(path);
     if (rel_wchar_str == NULL) return NULL;
     wchar_t *abs_wchar_str = _wfullpath(NULL, rel_wchar_str, SIZE_MAX);
     free(rel_wchar_str);
     struct Array *result = abs_wchar_str == NULL ? NULL
-        : epsl_epsl_str_from_wchar_str(0, abs_wchar_str);
+        : epsl_Wstr_to_Estr(0, abs_wchar_str);
     free(abs_wchar_str);
     return result;
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     char *resolved = realpath(c_path, NULL);
-    CLEANUP_C_STR(c_path);
-    return resolved ? C_str_to_epsl_str(0, resolved) : NULL;
+    CLEANUP_CONV_C_STR(c_path);
+    return resolved ? Cstr_to_Estr(0, resolved) : NULL;
 #endif
 }
 
@@ -215,11 +180,11 @@ NULLABLE_ARRAY_Byte *epsl_paths_os_user_name(void) {
     if (!GetUserNameW(wstr_name, UNLEN + 1)) {
         return NULL;
     }
-    return epsl_epsl_str_from_wchar_str(0, wstr_name);
+    return epsl_Wstr_to_Estr(0, wstr_name);
 #else
     struct passwd *pwd = getpwuid(geteuid());
     if (pwd == NULL) return NULL;
-    return C_str_to_epsl_str(0, _strdup(pwd->pw_name));
+    return dup_Cstr_to_Estr(0, pwd->pw_name);
 #endif
 }
 
@@ -255,14 +220,14 @@ NULLABLE_ARRAY_Byte *epsl_paths_read_symlink(ARRAY_Byte *path) {
     }
     
 cleanup:
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return result;
 #endif
 }
 
 bool epsl_paths_check_path_exists(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     if (wstr_path == NULL) return false;
     DWORD attrs = GetFileAttributesW(wstr_path);
     free(wstr_path);
@@ -271,14 +236,14 @@ bool epsl_paths_check_path_exists(ARRAY_Byte *path) {
     struct stat sb;
     EPSL_STR_TO_C_STR(path, c_path);
     int status = stat(c_path, &sb);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_check_path_is_file(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     if (wstr_path == NULL) return false;
     DWORD attrs = GetFileAttributesW(wstr_path);
     free(wstr_path);
@@ -288,7 +253,7 @@ bool epsl_paths_check_path_is_file(ARRAY_Byte *path) {
     struct stat sb;
     EPSL_STR_TO_C_STR(path, c_path);
     int status = stat(c_path, &sb);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     if (status == -1) return false;
     return S_ISREG(sb.st_mode);
 #endif
@@ -296,7 +261,7 @@ bool epsl_paths_check_path_is_file(ARRAY_Byte *path) {
 
 bool epsl_paths_check_path_is_dir(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     if (wstr_path == NULL) return false;
     DWORD attrs = GetFileAttributesW(wstr_path);
     free(wstr_path);
@@ -306,7 +271,7 @@ bool epsl_paths_check_path_is_dir(ARRAY_Byte *path) {
     struct stat sb;
     EPSL_STR_TO_C_STR(path, c_path);
     int status = stat(c_path, &sb);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     if (status == -1) return false;
     return S_ISDIR(sb.st_mode);
 #endif
@@ -314,7 +279,7 @@ bool epsl_paths_check_path_is_dir(ARRAY_Byte *path) {
 
 bool epsl_paths_check_path_is_symlink(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     if (wstr_path == NULL) return false;
     DWORD attrs = GetFileAttributesW(wstr_path);
     free(wstr_path);
@@ -324,7 +289,7 @@ bool epsl_paths_check_path_is_symlink(ARRAY_Byte *path) {
     struct stat sb;
     EPSL_STR_TO_C_STR(path, c_path);
     int status = lstat(c_path, &sb);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     if (status == -1) return false;
     return S_ISLNK(sb.st_mode);
 #endif
@@ -343,7 +308,7 @@ NULLABLE_ARRAY_ARRAY_Byte *epsl_paths_read_directory_contents(ARRAY_Byte *path) 
 
     bool trailing_sep = path->content[path->length - 1] == PATH_SEP_CHAR;
     
-    wchar_t *base_wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *base_wstr_path = epsl_Estr_to_Wstr(path);
     if (base_wstr_path == NULL) return NULL;
 
     size_t base_wstr_len = wcslen(base_wstr_path);
@@ -378,7 +343,7 @@ NULLABLE_ARRAY_ARRAY_Byte *epsl_paths_read_directory_contents(ARRAY_Byte *path) 
             continue;
         }
 
-        struct Array *filename = epsl_epsl_str_from_wchar_str(0, wstr_filename);
+        struct Array *filename = epsl_Wstr_to_Estr(0, wstr_filename);
 
         epsl_increment_length((struct Array*)result, sizeof(ARRAY_Byte*));
         result->content[result->length - 1] = (ARRAY_Byte*)filename;
@@ -403,14 +368,14 @@ NULLABLE_ARRAY_ARRAY_Byte *epsl_paths_read_directory_contents(ARRAY_Byte *path) 
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     DIR *dir = opendir(c_path);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     if (dir == NULL) return NULL;
     
     ARRAY_ARRAY_Byte *result = (ARRAY_ARRAY_Byte*)epsl_blank_array(sizeof(ARRAY_Byte*));
     
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        ARRAY_Byte *entry_name = C_str_to_epsl_str(1, _strdup(entry->d_name));
+        ARRAY_Byte *entry_name = dup_Cstr_to_Estr(1, entry->d_name);
         epsl_increment_length((struct Array*)result, sizeof(ARRAY_Byte*));
         result->content[result->length - 1] = entry_name;
     }
@@ -422,7 +387,7 @@ NULLABLE_ARRAY_ARRAY_Byte *epsl_paths_read_directory_contents(ARRAY_Byte *path) 
 
 bool epsl_paths_make_file(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     HANDLE handle = CreateFileW(
         wstr_path, // filename
         0, // desired access
@@ -442,28 +407,28 @@ bool epsl_paths_make_file(ARRAY_Byte *path) {
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     int status = creat(c_path, 0666); // note: octal
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_make_directory(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     bool success = CreateDirectoryW(wstr_path, NULL) != 0;
     free(wstr_path);
     return success;
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     int status = mkdir(c_path, 0777); // note: octal
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_make_symlink(ARRAY_Byte *from, ARRAY_Byte *to) {
 #ifdef _WIN32
-    wchar_t *wstr_to = epsl_wchar_str_from_epsl_str(to);
+    wchar_t *wstr_to = epsl_Estr_to_Wstr(to);
     if (wstr_to == NULL) {
         return false;
     }
@@ -472,7 +437,7 @@ bool epsl_paths_make_symlink(ARRAY_Byte *from, ARRAY_Byte *to) {
         free(wstr_to);
         return false;
     }
-    wchar_t *wstr_from = epsl_wchar_str_from_epsl_str(from);
+    wchar_t *wstr_from = epsl_Estr_to_Wstr(from);
     if (wstr_from == NULL) {
         free(wstr_to);
         return false;
@@ -489,17 +454,17 @@ bool epsl_paths_make_symlink(ARRAY_Byte *from, ARRAY_Byte *to) {
     EPSL_STR_TO_C_STR(from, c_from);
     EPSL_STR_TO_C_STR(to, c_to);
     int status = symlink(c_to, c_from);
-    CLEANUP_C_STR(c_from);
-    CLEANUP_C_STR(c_to);
+    CLEANUP_CONV_C_STR(c_from);
+    CLEANUP_CONV_C_STR(c_to);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_make_hardlink(ARRAY_Byte *from, ARRAY_Byte *to) {
 #ifdef _WIN32
-    wchar_t *wstr_from = epsl_wchar_str_from_epsl_str(from);
+    wchar_t *wstr_from = epsl_Estr_to_Wstr(from);
     if (wstr_from == NULL) return false;
-    wchar_t *wstr_to = epsl_wchar_str_from_epsl_str(to);
+    wchar_t *wstr_to = epsl_Estr_to_Wstr(to);
     if (wstr_to == NULL) {
         free(wstr_from);
         return false;
@@ -512,16 +477,16 @@ bool epsl_paths_make_hardlink(ARRAY_Byte *from, ARRAY_Byte *to) {
     EPSL_STR_TO_C_STR(from, c_from);
     EPSL_STR_TO_C_STR(to, c_to);
     int status = link(c_to, c_from);
-    CLEANUP_C_STR(c_from);
-    CLEANUP_C_STR(c_to);
+    CLEANUP_CONV_C_STR(c_from);
+    CLEANUP_CONV_C_STR(c_to);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_rename_file(ARRAY_Byte *from, ARRAY_Byte *to) {
 #ifdef _WIN32
-    wchar_t *wstr_old_name = epsl_wchar_str_from_epsl_str(from);
-    wchar_t *wstr_new_name = epsl_wchar_str_from_epsl_str(to);
+    wchar_t *wstr_old_name = epsl_Estr_to_Wstr(from);
+    wchar_t *wstr_new_name = epsl_Estr_to_Wstr(to);
     int status = _wrename(wstr_old_name, wstr_new_name);
     free(wstr_old_name);
     free(wstr_new_name);
@@ -530,50 +495,50 @@ bool epsl_paths_rename_file(ARRAY_Byte *from, ARRAY_Byte *to) {
     EPSL_STR_TO_C_STR(from, c_from);
     EPSL_STR_TO_C_STR(to, c_to);
     int status = rename(c_to, c_from);
-    CLEANUP_C_STR(c_from);
-    CLEANUP_C_STR(c_to);
+    CLEANUP_CONV_C_STR(c_from);
+    CLEANUP_CONV_C_STR(c_to);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_unlink_file(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     int status = _wunlink(wstr_path);
     free(wstr_path);
     return status != -1;
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     int status = unlink(c_path);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_rmdir(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     int status = _wrmdir(wstr_path);
     free(wstr_path);
     return status != -1;
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     int status = rmdir(c_path);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
 
 bool epsl_paths_chdir(ARRAY_Byte *path) {
 #ifdef _WIN32
-    wchar_t *wstr_path = epsl_wchar_str_from_epsl_str(path);
+    wchar_t *wstr_path = epsl_Estr_to_Wstr(path);
     int status = _wchdir(wstr_path);
     free(wstr_path);
     return status != -1;
 #else
     EPSL_STR_TO_C_STR(path, c_path);
     int status = chdir(c_path);
-    CLEANUP_C_STR(c_path);
+    CLEANUP_CONV_C_STR(c_path);
     return status != -1;
 #endif
 }
