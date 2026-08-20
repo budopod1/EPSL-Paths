@@ -265,21 +265,12 @@ Bool#[Path:path].is_symlink {
     return path_is_symlink [[path].stringify];
 }
 
-[Str]?#list_dir_contents [Str:dir] {
+[Str]?#list_dir_items [Str:dir] {
     return read_directory_contents [dir];
 }
 
-[Path]?#[Path:path].dir_contents {
-    [Str]?:maybe_contents = list_dir_contents [[path].stringify];
-    given (maybe_contents as [Str]:str_contents) {
-        [Path]:contents = [Path] [];
-        for (Str:str_item in str_contents) {
-            [contents].append[Path_from [str_item]];
-        };
-        return contents;
-    } else {
-        return null;
-    };
+[Str]?#[Path:path].dir_items {
+    return list_dir_items [[path].stringify];
 }
 
 Bool#create_file_at [Str:path] {
